@@ -1,0 +1,54 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:forAxxon.ViewModels"
+        x:Class="forAxxon.Views.MainWindow"
+        Title="forAxxon Shape Drawer"
+        Width="1000" Height="600">
+
+  <Grid ColumnDefinitions="*,250" RowDefinitions="Auto,*">
+    <StackPanel Orientation="Horizontal"
+                Grid.Row="0" Grid.Column="0"
+                Spacing="10" Margin="10">
+      <Button Content="Круг" Command="{Binding StartCircleCommand}" />
+      <Button Content="Треугольник" Command="{Binding StartTriangleCommand}" />
+      <Button Content="Квадрат" Command="{Binding StartSquareCommand}" />
+    </StackPanel>
+
+    <Border Grid.Row="1" Grid.Column="0"
+        Background="White"
+        BorderBrush="Gray"
+        BorderThickness="1">
+        <Canvas x:Name="DrawingCanvas"
+        Background="Transparent"
+        PointerPressed="DrawingCanvas_PointerPressed"
+        PointerMoved="DrawingCanvas_PointerMoved" />
+    </Border>
+
+    <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+            Background="#f8f8f8" Padding="10">
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding DrawnShapes}">
+          <ItemsControl.ItemTemplate>
+             <DataTemplate>
+              <Border Background="Transparent" 
+                      PointerPressed="ShapeItem_PointerPressed"
+                      Tag="{Binding}">
+                <StackPanel Margin="0,5">
+                  <TextBlock FontWeight="Bold" Text="{Binding Name}" />
+                  <ItemsControl ItemsSource="{Binding Points}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Separator Margin="0,5"/>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</Window>
