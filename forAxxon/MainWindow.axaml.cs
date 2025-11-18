@@ -3,13 +3,20 @@ using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using forAxxon.Models;
 using forAxxon.ViewModels;
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace forAxxon.Views;
 
@@ -26,9 +33,153 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = _vm;
-
         DrawingCanvas.SizeChanged += DrawingCanvas_SizeChanged;
+        _vm.DrawnShapes.CollectionChanged += (s, e) => RedrawCanvas();
+        _vm.StorageProvider = TopLevel.GetTopLevel(this)?.StorageProvider;
+        _vm.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == nameof(MainWindowViewModel.SelectedShape))
+                RedrawCanvas();
+        };
+        this.Opened += async (s, e) =>
+        {
+            var lastFile = SessionManager.GetLastFilePath();
+            if (!string.IsNullOrEmpty(lastFile))
+            {
+                var result = await ShowDialogAsync(
+                    "Начало работы",
+                    "Обнаружен последний проект. Загрузить его?",
+                    DialogButtons.YesNo
+                );
+
+                if (result == DialogResult.Yes)
+                {
+                    await _vm.LoadFromFile(lastFile);
+                    RedrawCanvas();
+                }
+            }
+        };
+
+        this.Closing += async (s, e) =>
+        {
+            if (_isClosingGracefully)
+                return;
+
+            if (_vm.DrawnShapes.Count == 0)
+                return;
+
+            e.Cancel = true;
+
+            var result = await ShowDialogAsync(
+                "Подтверждение",
+                "Сохранить изменения перед выходом?",
+                DialogButtons.YesNoCancel
+            );
+
+            if (result == DialogResult.Cancel)
+                return;
+
+            if (result == DialogResult.Yes)
+            {
+                await _vm.SaveToFileCommand.ExecuteAsync(null);
+            }
+
+            _isClosingGracefully = true;
+            Close();
+        };
+
     }
+    private bool _isClosingGracefully = false;
+
+    private async Task<DialogResult> ShowDialogAsync(string title, string message, DialogButtons buttons)
+    {
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 320,
+            Height = 160,
+            CanResize = false,
+            ShowInTaskbar = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Topmost = true
+        };
+
+        var result = DialogResult.None;
+
+        var textBlock = new TextBlock
+        {
+            Text = message,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(15, 15, 15, 0)
+        };
+
+        var buttonPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 15, 15),
+            Spacing = 10
+        };
+
+        void AddButton(string content, DialogResult res, bool isDefault = false)
+        {
+            var btn = new Button
+            {
+                Content = content,
+                Width = 80,
+                IsDefault = isDefault
+            };
+            btn.Click += (_, _) =>
+            {
+                result = res;
+                dialog.Close();
+            };
+            buttonPanel.Children.Add(btn);
+        }
+
+        switch (buttons)
+        {
+            case DialogButtons.OK:
+                AddButton("OK", DialogResult.OK, true);
+                break;
+            case DialogButtons.YesNo:
+                AddButton("Да", DialogResult.Yes, true);
+                AddButton("Нет", DialogResult.No);
+                break;
+            case DialogButtons.YesNoCancel:
+                AddButton("Да", DialogResult.Yes);
+                AddButton("Нет", DialogResult.No);
+                AddButton("Отмена", DialogResult.Cancel, true);
+                break;
+        }
+
+        var layout = new DockPanel();
+        DockPanel.SetDock(buttonPanel, Dock.Bottom);
+        layout.Children.Add(buttonPanel);
+        layout.Children.Add(textBlock);
+
+        dialog.Content = layout;
+
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
+    public enum DialogButtons
+    {
+        OK,
+        YesNo,
+        YesNoCancel
+    }
+
+    public enum DialogResult
+    {
+        None,
+        OK,
+        Yes,
+        No,
+        Cancel
+    }
+
 
     private void DrawingCanvas_SizeChanged(object? sender, SizeChangedEventArgs e)
     {
@@ -51,8 +202,6 @@ public partial class MainWindow : Window
     private void RedrawCanvas()
     {
         DrawingCanvas.Children.Clear();
-
-        // --- Готовые фигуры ---
         for (int i = 0; i < _vm.DrawnShapes.Count; i++)
         {
             var shape = _vm.DrawnShapes[i];
@@ -83,14 +232,11 @@ public partial class MainWindow : Window
                     var sqThickness = s.IsSelected ? 3.0 : 2.0;
                     var squarePoints = GetSquareFromDiagonal(a, clampedC);
                     DrawPolygon(squarePoints, sqBrush, sqThickness);
-                    DrawPolygon(squarePoints, Brushes.Blue);
                     var squareCenter = ComputeCentroid(squarePoints);
                     DrawLabel(squareCenter, label);
                     break;
             }
         }
-
-        // --- Фигуры пунктиром ---
         if (_vm.CurrentShape != null && _currentMousePosition.HasValue)
         {
             var mouse = _currentMousePosition.Value;
@@ -302,8 +448,6 @@ public partial class MainWindow : Window
 
             t -= step;
         }
-
-        // Если не нашли — возвращаем start (квадрат вырожден)
         if (t <= 0)
             return start;
 

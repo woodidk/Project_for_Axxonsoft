@@ -6,48 +6,66 @@
         Width="1000" Height="600">
 
   <Grid ColumnDefinitions="*,250" RowDefinitions="Auto,*">
+
     <StackPanel Orientation="Horizontal"
                 Grid.Row="0" Grid.Column="0"
                 Spacing="10" Margin="10">
       <Button Content="Круг" Command="{Binding StartCircleCommand}" />
       <Button Content="Треугольник" Command="{Binding StartTriangleCommand}" />
       <Button Content="Квадрат" Command="{Binding StartSquareCommand}" />
+      <Button Content="Отмена" Command="{Binding CancelDrawingCommand}" />
+      <Button Content="Удалить" Command="{Binding DeleteSelectedShapeCommand}" />
+      <Button Content="Сохранить" Command="{Binding SaveToFileCommand}" />
+      <Button Content="Загрузить" Command="{Binding LoadFromFileCommand}" />
     </StackPanel>
 
+    <ProgressBar Grid.Row="0" Grid.Column="0"
+                 Value="{Binding LoadProgress}"
+                 IsVisible="{Binding IsLoading}"
+                 Height="4"
+                 VerticalAlignment="Bottom"
+                 Background="Transparent"
+                 Foreground="DodgerBlue" />
+
     <Border Grid.Row="1" Grid.Column="0"
-        Background="White"
-        BorderBrush="Gray"
-        BorderThickness="1">
-        <Canvas x:Name="DrawingCanvas"
-        Background="Transparent"
-        PointerPressed="DrawingCanvas_PointerPressed"
-        PointerMoved="DrawingCanvas_PointerMoved" />
+            Background="White"
+            BorderBrush="Gray"
+            BorderThickness="1">
+      <Canvas x:Name="DrawingCanvas"
+              Background="Transparent"
+              PointerPressed="DrawingCanvas_PointerPressed"
+              PointerMoved="DrawingCanvas_PointerMoved" />
     </Border>
 
     <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
             Background="#f8f8f8" Padding="10">
       <ScrollViewer>
-        <ItemsControl ItemsSource="{Binding DrawnShapes}">
-          <ItemsControl.ItemTemplate>
-             <DataTemplate>
-              <Border Background="Transparent" 
-                      PointerPressed="ShapeItem_PointerPressed"
-                      Tag="{Binding}">
-                <StackPanel Margin="0,5">
-                  <TextBlock FontWeight="Bold" Text="{Binding Name}" />
-                  <ItemsControl ItemsSource="{Binding Points}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate>
-                        <TextBlock Text="{Binding}" />
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                  <Separator Margin="0,5"/>
-                </StackPanel>
-              </Border>
+        <ListBox ItemsSource="{Binding DrawnShapes}"
+                 SelectedItem="{Binding SelectedShape}"
+                 SelectionMode="Single"
+                 BorderThickness="0"
+                 Background="Transparent">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Margin="0,5">
+                <TextBlock FontWeight="Bold" Text="{Binding Name}" />
+                <ItemsControl ItemsSource="{Binding Points}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Text="{Binding}" FontFamily="Consolas" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Separator Margin="0,5"/>
+              </StackPanel>
             </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+          </ListBox.ItemTemplate>
+          <ListBox.Styles>
+            <Style Selector="ListBoxItem:selected">
+              <Setter Property="Background" Value="#e0e0ff" />
+            </Style>
+          </ListBox.Styles>
+        </ListBox>
       </ScrollViewer>
     </Border>
   </Grid>
