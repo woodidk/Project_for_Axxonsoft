@@ -70,13 +70,11 @@ public static class JsonSettings
     };
 }
 
-
 public record SerializableShape
 {
     public string Type { get; init; } = string.Empty;
     public List<Point> Points { get; init; } = new();
 }
-
 
 public static class ShapeConverter
 {
@@ -107,11 +105,13 @@ public static class ShapeConverter
     }
 }
 
-
 public abstract class ShapeBase : INotifyPropertyChanged
 {
     private bool _isSelected;
     private List<Point> _points = new();
+    private int _index;
+
+    public string DisplayName => $"{Index}. {Name}";
 
     public List<Point> Points
     {
@@ -122,6 +122,22 @@ public abstract class ShapeBase : INotifyPropertyChanged
             OnPropertyChanged();
         }
     }
+
+    public int Index
+    {
+        get => _index;
+        set
+        {
+            if (_index != value)
+            {
+                _index = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DisplayName));
+            }
+        }
+    }
+
+    public abstract string Name { get; }
 
     public bool IsSelected
     {
@@ -136,14 +152,13 @@ public abstract class ShapeBase : INotifyPropertyChanged
         }
     }
 
-    public abstract string Name { get; }
-
     public event PropertyChangedEventHandler? PropertyChanged;
 
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+    public void NotifyPointsChanged() => OnPropertyChanged(nameof(Points));
 }
 
 public class Triangle : ShapeBase

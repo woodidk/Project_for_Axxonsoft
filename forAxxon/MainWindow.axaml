@@ -5,40 +5,105 @@
         Title="forAxxon Shape Drawer"
         Width="1000" Height="600">
 
+  <Window.Styles>
+    <!-- Общий стиль для кнопок -->
+    <Style Selector="Button">
+      <Setter Property="Background" Value="#f0f0f0" />
+      <Setter Property="BorderBrush" Value="#cccccc" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="Margin" Value="2" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button:pointerover">
+      <Setter Property="Background" Value="#e0e0e0" />
+    </Style>
+
+    <Style Selector="Button:pressed">
+      <Setter Property="Background" Value="#d0d0d0" />
+    </Style>
+
+    <!-- Стиль для опасных действий -->
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="#ff6b6b" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderBrush" Value="#ff4757" />
+    </Style>
+
+    <Style Selector="Button.danger:pointerover">
+      <Setter Property="Background" Value="#ff5252" />
+    </Style>
+
+    <Style Selector="Button.danger:pressed">
+      <Setter Property="Background" Value="#ff3a3a" />
+    </Style>
+
+    <!-- Стили для ListBox -->
+    <Style Selector="ListBoxItem:pointerover">
+      <Setter Property="Background" Value="#f5f5f5" />
+    </Style>
+
+    <Style Selector="ListBoxItem:selected">
+      <Setter Property="Background" Value="#e0e0ff" />
+      <Setter Property="BorderBrush" Value="#999" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+  </Window.Styles>
+
   <Grid ColumnDefinitions="*,250" RowDefinitions="Auto,*">
 
-    <StackPanel Orientation="Horizontal"
-                Grid.Row="0" Grid.Column="0"
-                Spacing="10" Margin="10">
-      <Button Content="Круг" Command="{Binding StartCircleCommand}" />
-      <Button Content="Треугольник" Command="{Binding StartTriangleCommand}" />
-      <Button Content="Квадрат" Command="{Binding StartSquareCommand}" />
-      <Button Content="Отмена" Command="{Binding CancelDrawingCommand}" />
-      <Button Content="Удалить" Command="{Binding DeleteSelectedShapeCommand}" />
-      <Button Content="Сохранить" Command="{Binding SaveToFileCommand}" />
-      <Button Content="Загрузить" Command="{Binding LoadFromFileCommand}" />
-    </StackPanel>
+    <!-- Панель инструментов -->
+    <WrapPanel Grid.Row="0" Grid.Column="0"
+           Orientation="Horizontal"
+           Margin="10">
+  <Button Content="Круг" Command="{Binding StartCircleCommand}" />
+  <Button Content="Треугольник" Command="{Binding StartTriangleCommand}" />
+  <Button Content="Квадрат" Command="{Binding StartSquareCommand}" />
+  <Button Content="Отмена" Command="{Binding CancelDrawingCommand}" />
+  <Button Content="Удалить" Command="{Binding DeleteSelectedShapeCommand}" />
+  <Button Content="Сохранить" Command="{Binding SaveToFileCommand}" />
+  <Button Content="Загрузить" Command="{Binding LoadFromFileCommand}" />
+  <Button Content="Редактировать" Command="{Binding TogglePointEditingCommand}" />
+  <Button Content="Очистить всё" Command="{Binding ClearAllCommand}" Classes="danger" />
+</WrapPanel>
 
+    <!-- Индикатор загрузки -->
     <ProgressBar Grid.Row="0" Grid.Column="0"
                  Value="{Binding LoadProgress}"
                  IsVisible="{Binding IsLoading}"
-                 Height="4"
+                 Height="6"
                  VerticalAlignment="Bottom"
                  Background="Transparent"
-                 Foreground="DodgerBlue" />
+                 Foreground="#007BFF"
+                 Margin="10,0,10,0" />
 
+    <!-- Холст для рисования -->
     <Border Grid.Row="1" Grid.Column="0"
-            Background="White"
-            BorderBrush="Gray"
-            BorderThickness="1">
-      <Canvas x:Name="DrawingCanvas"
-              Background="Transparent"
-              PointerPressed="DrawingCanvas_PointerPressed"
-              PointerMoved="DrawingCanvas_PointerMoved" />
+            Background="#fafafa"
+            BorderBrush="#ddd"
+            BorderThickness="1"
+            CornerRadius="4">
+      <ScrollViewer x:Name="DrawingScrollViewer"
+                    HorizontalScrollBarVisibility="Auto"
+                    VerticalScrollBarVisibility="Auto">
+        <Canvas x:Name="DrawingCanvas"
+                Width="1500"
+                Height="1500"
+                Background="White"
+                PointerPressed="DrawingCanvas_PointerPressed"
+                PointerMoved="DrawingCanvas_PointerMoved"
+                PointerReleased="DrawingCanvas_PointerReleased" />
+      </ScrollViewer>
     </Border>
 
+    <!-- Панель свойств -->
     <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
-            Background="#f8f8f8" Padding="10">
+            Background="White"
+            Padding="12"
+            BorderBrush="#eee"
+            BorderThickness="1">
       <ScrollViewer>
         <ListBox ItemsSource="{Binding DrawnShapes}"
                  SelectedItem="{Binding SelectedShape}"
@@ -47,26 +112,30 @@
                  Background="Transparent">
           <ListBox.ItemTemplate>
             <DataTemplate>
-              <StackPanel Margin="0,5">
-                <TextBlock FontWeight="Bold" Text="{Binding Name}" />
+              <StackPanel Margin="0,8">
+                <TextBlock FontWeight="Bold"
+                           Text="{Binding DisplayName}"
+                           FontSize="14"
+                           Foreground="#2c3e50" />
                 <ItemsControl ItemsSource="{Binding Points}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <TextBlock Text="{Binding}" FontFamily="Consolas" />
+                      <TextBlock Text="{Binding}"
+                                 FontFamily="Consolas"
+                                 FontSize="12"
+                                 Foreground="#7f8c8d" />
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Separator Margin="0,5"/>
+                <Separator Margin="0,5,0,0"
+                           Background="#ecf0f1"
+                           Height="1" />
               </StackPanel>
             </DataTemplate>
           </ListBox.ItemTemplate>
-          <ListBox.Styles>
-            <Style Selector="ListBoxItem:selected">
-              <Setter Property="Background" Value="#e0e0ff" />
-            </Style>
-          </ListBox.Styles>
         </ListBox>
       </ScrollViewer>
     </Border>
+
   </Grid>
 </Window>

@@ -1,5 +1,4 @@
-﻿// SessionManager.cs
-using forAxxon.Models;
+﻿using forAxxon.Models;
 using System;
 using System.IO;
 using System.Text.Json;

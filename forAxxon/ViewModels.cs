@@ -9,7 +9,6 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace forAxxon.ViewModels;
@@ -19,6 +18,13 @@ public partial class MainWindowViewModel : ObservableObject
     private ShapeBase? _currentShape;
     private readonly List<ShapeBase> _drawnShapes = new();
     private ShapeBase? _selectedShape;
+    private bool _isEditingPoints;
+
+    public bool IsEditingPoints
+    {
+        get => _isEditingPoints;
+        set => SetProperty(ref _isEditingPoints, value);
+    }
 
     public IStorageProvider? StorageProvider { get; set; }
 
@@ -47,14 +53,13 @@ public partial class MainWindowViewModel : ObservableObject
         private set => SetProperty(ref _currentShape, value);
     }
 
-    [RelayCommand]
-    private void DeleteSelectedShape()
+    public Size CanvasSize { get; set; } = new(800, 600); 
+
+    private void UpdateShapeIndices()
     {
-        if (SelectedShape != null)
+        for (int i = 0; i < DrawnShapes.Count; i++)
         {
-            _drawnShapes.Remove(SelectedShape);
-            DrawnShapes.Remove(SelectedShape);
-            SelectedShape = null;
+            DrawnShapes[i].Index = i + 1;
         }
     }
 
@@ -71,12 +76,6 @@ public partial class MainWindowViewModel : ObservableObject
     {
         get => _loadProgress;
         private set => SetProperty(ref _loadProgress, value);
-    }
-
-    [RelayCommand]
-    private async Task LoadFromFile()
-    {
-        await LoadFromFileInternal(null); 
     }
 
     public async Task LoadFromFile(string filePath)
@@ -99,8 +98,8 @@ public partial class MainWindowViewModel : ObservableObject
                 Title = "Загрузить фигуры",
                 FileTypeFilter = new[]
                 {
-                new FilePickerFileType("JSON файлы") { Patterns = ["*.json"] }
-            }
+                    new FilePickerFileType("JSON файлы") { Patterns = ["*.json"] }
+                }
             };
 
             var files = await StorageProvider.OpenFilePickerAsync(options);
@@ -159,6 +158,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             SelectedShape = null;
             SessionManager.SetLastFilePath(file.Path.LocalPath);
+            UpdateShapeIndices();
         }
         catch (Exception ex)
         {
@@ -168,6 +168,31 @@ public partial class MainWindowViewModel : ObservableObject
         {
             IsLoading = false;
         }
+    }
+
+    [RelayCommand]
+    private void TogglePointEditing()
+    {
+        IsEditingPoints = !IsEditingPoints;
+        CancelDrawing();
+    }
+
+    [RelayCommand]
+    private void DeleteSelectedShape()
+    {
+        if (SelectedShape != null)
+        {
+            _drawnShapes.Remove(SelectedShape);
+            DrawnShapes.Remove(SelectedShape);
+            SelectedShape = null;
+            UpdateShapeIndices();
+        }
+    }
+
+    [RelayCommand]
+    private async Task LoadFromFile()
+    {
+        await LoadFromFileInternal(null);
     }
 
     [RelayCommand]
@@ -202,6 +227,27 @@ public partial class MainWindowViewModel : ObservableObject
             System.Diagnostics.Debug.WriteLine($"Ошибка сохранения: {ex}");
         }
     }
+    public Func<Task<bool>>? RequestConfirmation { get; set; }
+
+    [RelayCommand]
+    private async Task ClearAll()
+    {
+        if (DrawnShapes.Count == 0)
+            return;
+
+        var confirmed = true;
+        if (RequestConfirmation != null)
+        {
+            confirmed = await RequestConfirmation();
+        }
+
+        if (confirmed)
+        {
+            DrawnShapes.Clear();
+            _drawnShapes.Clear();
+            SelectedShape = null;
+        }
+    }
 
     [RelayCommand]
     private void CancelDrawing() => CurrentShape = null;
@@ -215,14 +261,47 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void StartSquare() => CurrentShape = new Square();
 
+    private double Distance(Point a, Point b) =>
+        Math.Sqrt(Math.Pow(b.X - a.X, 2) + Math.Pow(b.Y - a.Y, 2));
+
     public void HandleCanvasPointerPressed(Point point)
     {
+        if (IsEditingPoints)
+            return;
+
         foreach (var shape in DrawnShapes)
             shape.IsSelected = false;
 
         if (CurrentShape == null) return;
 
-        CurrentShape.Points.Add(point);
+        if (CurrentShape is Circle circle && CurrentShape.Points.Count == 1)
+        {
+            var center = CurrentShape.Points[0];
+            var dx = point.X - center.X;
+            var dy = point.Y - center.Y;
+            var maxRadiusX = Math.Min(center.X, CanvasSize.Width - center.X);
+            var maxRadiusY = Math.Min(center.Y, CanvasSize.Height - center.Y);
+            var maxRadius = Math.Min(maxRadiusX, maxRadiusY);
+
+            var actualRadius = Math.Sqrt(dx * dx + dy * dy);
+            if (actualRadius > maxRadius && actualRadius > 0)
+            {
+                var scale = maxRadius / actualRadius;
+                var clampedPoint = new Point(
+                    center.X + dx * scale,
+                    center.Y + dy * scale
+                );
+                CurrentShape.Points.Add(clampedPoint);
+            }
+            else
+            {
+                CurrentShape.Points.Add(point);
+            }
+        }
+        else
+        {
+            CurrentShape.Points.Add(point);
+        }
 
         int required = CurrentShape switch
         {
@@ -234,8 +313,31 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (CurrentShape.Points.Count == required)
         {
+            if (CurrentShape is Circle completedCircle && completedCircle.Points.Count == 2)
+            {
+                var center = completedCircle.Points[0];
+                var outer = completedCircle.Points[1];
+                var radius = Distance(center, outer);
+                var maxRadiusX = Math.Min(center.X, CanvasSize.Width - center.X);
+                var maxRadiusY = Math.Min(center.Y, CanvasSize.Height - center.Y);
+                var maxRadius = Math.Min(maxRadiusX, maxRadiusY);
+
+                if (radius > maxRadius && radius > 0)
+                {
+                    var direction = new Point(outer.X - center.X, outer.Y - center.Y);
+                    var scale = maxRadius / radius;
+                    var newOuter = new Point(
+                        center.X + direction.X * scale,
+                        center.Y + direction.Y * scale
+                    );
+                    CurrentShape.Points = new List<Point> { center, newOuter };
+                }
+            }
+
             _drawnShapes.Add(CurrentShape);
             DrawnShapes.Add(CurrentShape);
+            CurrentShape.Index = DrawnShapes.Count;
+
             CurrentShape = CurrentShape switch
             {
                 Circle => new Circle(),
