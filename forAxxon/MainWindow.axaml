@@ -6,7 +6,6 @@
         Width="1000" Height="600">
 
   <Window.Styles>
-    <!-- Общий стиль для кнопок -->
     <Style Selector="Button">
       <Setter Property="Background" Value="#f0f0f0" />
       <Setter Property="BorderBrush" Value="#cccccc" />
@@ -16,35 +15,26 @@
       <Setter Property="FontSize" Value="13" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
-
     <Style Selector="Button:pointerover">
       <Setter Property="Background" Value="#e0e0e0" />
     </Style>
-
     <Style Selector="Button:pressed">
       <Setter Property="Background" Value="#d0d0d0" />
     </Style>
-
-    <!-- Стиль для опасных действий -->
     <Style Selector="Button.danger">
       <Setter Property="Background" Value="#ff6b6b" />
       <Setter Property="Foreground" Value="White" />
       <Setter Property="BorderBrush" Value="#ff4757" />
     </Style>
-
     <Style Selector="Button.danger:pointerover">
       <Setter Property="Background" Value="#ff5252" />
     </Style>
-
     <Style Selector="Button.danger:pressed">
       <Setter Property="Background" Value="#ff3a3a" />
     </Style>
-
-    <!-- Стили для ListBox -->
     <Style Selector="ListBoxItem:pointerover">
       <Setter Property="Background" Value="#f5f5f5" />
     </Style>
-
     <Style Selector="ListBoxItem:selected">
       <Setter Property="Background" Value="#e0e0ff" />
       <Setter Property="BorderBrush" Value="#999" />
@@ -52,25 +42,28 @@
     </Style>
   </Window.Styles>
 
-  <Grid ColumnDefinitions="*,250" RowDefinitions="Auto,*">
+  <Grid ColumnDefinitions="*,250" RowDefinitions="Auto,Auto,*">
+    <!-- Строка с текущим режимом -->
+    <TextBlock Grid.Row="0" Grid.Column="0"
+               Text="{Binding CurrentModeText}"
+               Margin="10,5"
+               FontSize="14"
+               FontWeight="Bold"
+               Foreground="#007BFF" />
 
-    <!-- Панель инструментов -->
-    <WrapPanel Grid.Row="0" Grid.Column="0"
-           Orientation="Horizontal"
-           Margin="10">
-  <Button Content="Круг" Command="{Binding StartCircleCommand}" />
-  <Button Content="Треугольник" Command="{Binding StartTriangleCommand}" />
-  <Button Content="Квадрат" Command="{Binding StartSquareCommand}" />
-  <Button Content="Отмена" Command="{Binding CancelDrawingCommand}" />
-  <Button Content="Удалить" Command="{Binding DeleteSelectedShapeCommand}" />
-  <Button Content="Сохранить" Command="{Binding SaveToFileCommand}" />
-  <Button Content="Загрузить" Command="{Binding LoadFromFileCommand}" />
-  <Button Content="Редактировать" Command="{Binding TogglePointEditingCommand}" />
-  <Button Content="Очистить всё" Command="{Binding ClearAllCommand}" Classes="danger" />
-</WrapPanel>
+    <WrapPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" Margin="10">
+      <Button Content="Круг" Command="{Binding StartCircleCommand}" />
+      <Button Content="Треугольник" Command="{Binding StartTriangleCommand}" />
+      <Button Content="Квадрат" Command="{Binding StartSquareCommand}" />
+      <Button Content="Отмена" Command="{Binding CancelDrawingCommand}" />
+      <Button Content="Удалить" Command="{Binding DeleteSelectedShapeCommand}" />
+      <Button Content="Сохранить" Command="{Binding SaveToFileCommand}" />
+      <Button Content="Загрузить" Command="{Binding LoadFromFileCommand}" />
+      <Button Content="Редактировать" Command="{Binding TogglePointEditingCommand}" />
+      <Button Content="Очистить всё" Command="{Binding ClearAllCommand}" Classes="danger" />
+    </WrapPanel>
 
-    <!-- Индикатор загрузки -->
-    <ProgressBar Grid.Row="0" Grid.Column="0"
+    <ProgressBar Grid.Row="1" Grid.Column="0"
                  Value="{Binding LoadProgress}"
                  IsVisible="{Binding IsLoading}"
                  Height="6"
@@ -79,8 +72,7 @@
                  Foreground="#007BFF"
                  Margin="10,0,10,0" />
 
-    <!-- Холст для рисования -->
-    <Border Grid.Row="1" Grid.Column="0"
+    <Border Grid.Row="2" Grid.Column="0"
             Background="#fafafa"
             BorderBrush="#ddd"
             BorderThickness="1"
@@ -89,8 +81,8 @@
                     HorizontalScrollBarVisibility="Auto"
                     VerticalScrollBarVisibility="Auto">
         <Canvas x:Name="DrawingCanvas"
-                Width="1500"
-                Height="1500"
+                MinWidth="10000"
+                MinHeight="10000"
                 Background="White"
                 PointerPressed="DrawingCanvas_PointerPressed"
                 PointerMoved="DrawingCanvas_PointerMoved"
@@ -98,8 +90,7 @@
       </ScrollViewer>
     </Border>
 
-    <!-- Панель свойств -->
-    <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+    <Border Grid.Row="0" Grid.RowSpan="3" Grid.Column="1"
             Background="White"
             Padding="12"
             BorderBrush="#eee"
@@ -136,6 +127,5 @@
         </ListBox>
       </ScrollViewer>
     </Border>
-
   </Grid>
 </Window>

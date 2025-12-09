@@ -1,13 +1,16 @@
-﻿using forAxxon.Models;
+﻿using Avalonia;
+using Avalonia.Platform.Storage;
+using forAxxon.Models;
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace forAxxon;
 
 public static class SessionManager
 {
-    private static readonly string SessionFile = Path.Combine(
+    private static readonly string s_sessionFile = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "forAxxon",
         "session.json"
@@ -15,32 +18,39 @@ public static class SessionManager
 
     static SessionManager()
     {
-        var dir = Path.GetDirectoryName(SessionFile)!;
+        var dir = Path.GetDirectoryName(s_sessionFile)!;
         if (!Directory.Exists(dir))
             Directory.CreateDirectory(dir);
     }
 
     public static string? GetLastFilePath()
     {
-        if (!File.Exists(SessionFile))
-            return null;
-
         try
         {
-            var json = File.ReadAllText(SessionFile);
-            var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("LastFilePath", out var prop) && prop.ValueKind == JsonValueKind.String)
+            var json = File.ReadAllText(s_sessionFile);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("LastFilePath", out var prop) &&
+                prop.ValueKind == JsonValueKind.String)
             {
                 var path = prop.GetString();
                 if (!string.IsNullOrEmpty(path) && File.Exists(path))
                     return path;
             }
+            return null;
         }
-        catch (Exception ex)
+        catch (FileNotFoundException)
         {
-            System.Diagnostics.Debug.WriteLine($"Ошибка чтения сессии: {ex}");
+            return null;
         }
-        return null;
+        catch (DirectoryNotFoundException)
+        {
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Diagnostics.Debug.WriteLine($"Невозможно прочитать сессию: {ex}");
+            return null;
+        }
     }
 
     public static void SetLastFilePath(string? path)
@@ -48,7 +58,7 @@ public static class SessionManager
         try
         {
             var json = JsonSerializer.Serialize(new { LastFilePath = path }, JsonSettings.Options);
-            File.WriteAllText(SessionFile, json);
+            File.WriteAllText(s_sessionFile, json);
         }
         catch (Exception ex)
         {

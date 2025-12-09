@@ -23,7 +23,6 @@ public class PointJsonConverter : JsonConverter<Point>
         {
             if (reader.TokenType == JsonTokenType.EndObject)
                 break;
-
             if (reader.TokenType != JsonTokenType.PropertyName)
                 throw new JsonException("Некорректный формат объекта Point.");
 
@@ -70,11 +69,7 @@ public static class JsonSettings
     };
 }
 
-public record SerializableShape
-{
-    public string Type { get; init; } = string.Empty;
-    public List<Point> Points { get; init; } = new();
-}
+public record SerializableShape(string Type, List<Point> Points);
 
 public static class ShapeConverter
 {
@@ -91,20 +86,18 @@ public static class ShapeConverter
 
     public static SerializableShape ToDto(ShapeBase shape)
     {
-        return new SerializableShape
-        {
-            Type = shape switch
+        return new SerializableShape(
+            Type: shape switch
             {
                 Circle => "Circle",
                 Triangle => "Triangle",
                 Square => "Square",
                 _ => throw new NotSupportedException($"Неизвестная фигура: {shape.GetType()}")
             },
-            Points = shape.Points.ToList()
-        };
+            Points: shape.Points.ToList()
+        );
     }
 }
-
 public abstract class ShapeBase : INotifyPropertyChanged
 {
     private bool _isSelected;
@@ -158,6 +151,7 @@ public abstract class ShapeBase : INotifyPropertyChanged
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+
     public void NotifyPointsChanged() => OnPropertyChanged(nameof(Points));
 }
 
@@ -169,6 +163,8 @@ public class Triangle : ShapeBase
 public class Circle : ShapeBase
 {
     public override string Name => "Круг";
+
+    public double Radius => Points.Count >= 2 ? GeometryHelper.Distance(Points[0], Points[1]) : 0;
 }
 
 public class Square : ShapeBase
