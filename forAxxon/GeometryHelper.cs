@@ -27,8 +27,6 @@ public static class GeometryHelper
             new Point(cx + dy, cy - dx)
         };
     }
-
-    // Ограничивает внешнюю точку круга, чтобы вся окружность оставалась в x ≥ 0, y ≥ 0
     public static Point ClampCircleOuterToNonNegativeArea(Point center, Point outer)
     {
         var dx = outer.X - center.X;
@@ -45,7 +43,7 @@ public static class GeometryHelper
         return new Point(center.X + dx * scale, center.Y + dy * scale);
     }
 
-    // Ограничивает вторую точку диагонали квадрата, чтобы весь квадрат оставался в x ≥ 0, y ≥ 0
+
     public static Point ClampSquareOuterToNonNegativeArea(Point a, Point candidateC)
     {
         var square = GetSquareFromDiagonal(a, candidateC);

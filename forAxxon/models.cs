@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using Avalonia.Controls.Shapes;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -8,9 +9,21 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace forAxxon.Models;
+public interface IShape
+{
+    string Type { get; }
+    string Name { get; }
+    string DisplayName { get; }
+    int Index { get; set; }
+    List<Point> Points { get; set; }
+    bool IsSelected { get; set; }
 
+    Point ComputeCentroid();
+    void NotifyPointsChanged();
+}
 public class PointJsonConverter : JsonConverter<Point>
 {
+    
     public override Point Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         if (reader.TokenType != JsonTokenType.StartObject)
@@ -71,39 +84,13 @@ public static class JsonSettings
 
 public record SerializableShape(string Type, List<Point> Points);
 
-public static class ShapeConverter
-{
-    public static ShapeBase ToRuntimeModel(SerializableShape dto)
-    {
-        return dto.Type switch
-        {
-            "Circle" => new Circle { Points = dto.Points },
-            "Triangle" => new Triangle { Points = dto.Points },
-            "Square" => new Square { Points = dto.Points },
-            _ => throw new NotSupportedException($"Неизвестный тип фигуры: {dto.Type}")
-        };
-    }
-
-    public static SerializableShape ToDto(ShapeBase shape)
-    {
-        return new SerializableShape(
-            Type: shape switch
-            {
-                Circle => "Circle",
-                Triangle => "Triangle",
-                Square => "Square",
-                _ => throw new NotSupportedException($"Неизвестная фигура: {shape.GetType()}")
-            },
-            Points: shape.Points.ToList()
-        );
-    }
-}
-public abstract class ShapeBase : INotifyPropertyChanged
+public abstract class ShapeBase : INotifyPropertyChanged, IShape
 {
     private bool _isSelected;
     private List<Point> _points = new();
     private int _index;
 
+    public virtual string Type => GetType().Name;
     public string DisplayName => $"{Index}. {Name}";
 
     public List<Point> Points
@@ -145,6 +132,17 @@ public abstract class ShapeBase : INotifyPropertyChanged
         }
     }
 
+    public Point ComputeCentroid()
+    {
+        return this switch
+        {
+            Circle c => c.Points[0],
+            Triangle t => GeometryHelper.ComputeCentroid(t.Points),
+            Square s => GeometryHelper.ComputeCentroid(GeometryHelper.GetSquareFromDiagonal(s.Points[0], s.Points[1])),
+            _ => new Point(0, 0)
+        };
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
@@ -170,4 +168,67 @@ public class Circle : ShapeBase
 public class Square : ShapeBase
 {
     public override string Name => "Квадрат";
+}
+
+public static class ShapeConverter
+{
+    public static ShapeBase ToRuntimeModel(SerializableShape dto)
+    {
+        if (dto == null)
+            throw new ArgumentNullException(nameof(dto));
+
+        if (string.IsNullOrWhiteSpace(dto.Type))
+            throw new ArgumentException("Тип фигуры не может быть пустым", nameof(dto.Type));
+
+        if (dto.Points == null)
+            throw new ArgumentException("Точки фигуры не могут быть null", nameof(dto.Points));
+
+        if (dto.Points.Count == 0)
+            throw new ArgumentException("Фигура должна содержать хотя бы одну точку", nameof(dto.Points));
+
+        ShapeBase shape = dto.Type switch
+        {
+            nameof(Circle) => new Circle(),
+            nameof(Triangle) => new Triangle(),
+            nameof(Square) => new Square(),
+            _ => throw new NotSupportedException($"Неизвестный тип фигуры: {dto.Type}")
+        };
+
+        int expectedCount = shape switch
+        {
+            Circle => 2,
+            Triangle => 3,
+            Square => 2,
+            _ => throw new InvalidOperationException("Неподдерживаемый тип фигуры")
+        };
+
+        if (dto.Points.Count != expectedCount)
+        {
+            throw new InvalidOperationException(
+                $"{dto.Type} требует ровно {expectedCount} точек, получено: {dto.Points.Count}");
+        }
+
+        foreach (var p in dto.Points)
+        {
+            if (double.IsNaN(p.X) || double.IsNaN(p.Y) ||
+                double.IsInfinity(p.X) || double.IsInfinity(p.Y))
+            {
+                throw new ArgumentException("Координаты точек не могут быть NaN или бесконечностью");
+            }
+        }
+
+        shape.Points = dto.Points;
+        return shape;
+    }
+
+    public static SerializableShape ToDto(ShapeBase shape)
+    {
+        if (shape == null)
+            throw new ArgumentNullException(nameof(shape));
+
+        return new SerializableShape(
+            Type: shape.Type,
+            Points: shape.Points?.ToList() ?? new List<Point>()
+        );
+    }
 }
