@@ -1,4 +1,6 @@
-﻿using Avalonia.Platform.Storage;
+﻿using Avalonia;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using forAxxon.Models;
@@ -10,7 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Avalonia;
+
 namespace forAxxon.ViewModels;
 
 public enum InteractionMode
@@ -42,11 +44,43 @@ public partial class MainWindowViewModel : ObservableObject
     private Point? _lastClickPoint;
     private DateTime _lastClickTime = DateTime.MinValue;
     private InteractionMode _currentMode = InteractionMode.Idle;
-
-    // === НОВЫЕ ПОЛЯ ДЛЯ ПЕРЕКЛЮЧЕНИЯ ФИГУР ===
+    private bool _skipAllErrors = false;
     private Point? _lastClickPositionForStack;
     private List<ShapeBase>? _shapesAtLastClick;
     private int _currentIndexInStack;
+
+    // === ЗАЛИВКА: ручное объявление свойства ===
+    private Color? _selectedFillColor = Colors.Transparent;
+    public Color? SelectedFillColor
+    {
+        get => _selectedFillColor;
+        set
+        {
+            if (SetProperty(ref _selectedFillColor, value))
+            {
+                if (SelectedShape != null)
+                {
+                    SelectedShape.FillColor = value;
+                    OnPropertyChanged(nameof(DrawnShapes));
+                }
+            }
+        }
+    }
+
+    public List<Color?> FillColorOptions { get; } = new()
+    {
+        null, // Без заливки
+        Colors.Transparent,
+        Colors.White,
+        Colors.Black,
+        Colors.Red,
+        Colors.Green,
+        Colors.Blue,
+        Colors.Yellow,
+        Colors.Cyan,
+        Colors.Magenta,
+        Colors.Gray
+    };
 
     [ObservableProperty]
     private double _loadProgress;
@@ -126,7 +160,7 @@ public partial class MainWindowViewModel : ObservableObject
         _shapesAtLastClick = null;
         _lastClickPositionForStack = null;
         _currentIndexInStack = 0;
-        _lastSelectedShapeForDrag = null; 
+        _lastSelectedShapeForDrag = null;
     }
 
     public bool IsEditingPoints
@@ -208,21 +242,21 @@ public partial class MainWindowViewModel : ObservableObject
     private void StartCircle()
     {
         CurrentMode = InteractionMode.DrawingCircle;
-        CurrentShape = new Circle();
+        CurrentShape = new Circle { FillColor = SelectedFillColor };
     }
 
     [RelayCommand(CanExecute = nameof(CanStartTriangle))]
     private void StartTriangle()
     {
         CurrentMode = InteractionMode.DrawingTriangle;
-        CurrentShape = new Triangle();
+        CurrentShape = new Triangle { FillColor = SelectedFillColor };
     }
 
     [RelayCommand(CanExecute = nameof(CanStartSquare))]
     private void StartSquare()
     {
         CurrentMode = InteractionMode.DrawingSquare;
-        CurrentShape = new Square();
+        CurrentShape = new Square { FillColor = SelectedFillColor };
     }
 
     public void OnCanvasPointerPressed(Point point, bool isRightClick = false)
@@ -427,13 +461,16 @@ public partial class MainWindowViewModel : ObservableObject
             square.Points[1] = GeometryHelper.ClampSquareOuterToNonNegativeArea(square.Points[0], square.Points[1]);
         }
 
+        // Применяем заливку при финализации
+        CurrentShape.FillColor = SelectedFillColor;
+
         DrawnShapes.Add(CurrentShape);
         CurrentShape.Index = DrawnShapes.Count;
         CurrentShape = CurrentShape switch
         {
-            Circle => new Circle(),
-            Triangle => new Triangle(),
-            Square => new Square(),
+            Circle => new Circle { FillColor = SelectedFillColor },
+            Triangle => new Triangle { FillColor = SelectedFillColor },
+            Square => new Square { FillColor = SelectedFillColor },
             _ => null
         };
         CurrentMode = InteractionMode.Idle;
@@ -581,7 +618,6 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (StorageProvider == null) return;
         IStorageFile? file = null;
-
         if (string.IsNullOrEmpty(filePath))
         {
             var files = await StorageProvider.OpenFilePickerAsync(new()
@@ -604,13 +640,15 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         if (file == null) return;
-
         try
         {
             var fileInfo = new FileInfo(file.Path.LocalPath);
             if (fileInfo.Length > MAX_FILE_SIZE)
             {
-                System.Diagnostics.Debug.WriteLine($"Файл превышает допустимый размер ({MAX_FILE_SIZE / 1024 / 1024} МБ)");
+                await _dialogService.ShowConfirmationAsync(
+                    "Ошибка",
+                    $"Файл превышает допустимый размер ({MAX_FILE_SIZE / 1024 / 1024} МБ).",
+                    DialogButtons.OK);
                 return;
             }
         }
@@ -620,38 +658,94 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        IsLoading = true;
+        LoadProgress = 0;
+
+        var validShapes = new List<ShapeBase>();
+        _skipAllErrors = false;
+
         try
         {
-            var json = await File.ReadAllTextAsync(file.Path.LocalPath);
-            var dtoList = JsonSerializer.Deserialize<List<SerializableShape>>(json, JsonSettings.Options) ?? new List<SerializableShape>();
+            string json = await File.ReadAllTextAsync(file.Path.LocalPath);
 
-            var validShapes = new List<ShapeBase>();
-            foreach (var dto in dtoList)
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (root.ValueKind != JsonValueKind.Array)
             {
+                await _dialogService.ShowConfirmationAsync(
+                    "Ошибка формата",
+                    "Файл должен содержать JSON-массив фигур.",
+                    DialogButtons.OK);
+                return;
+            }
+
+            var array = root.EnumerateArray();
+            int index = 0;
+            int total = root.GetArrayLength();
+
+            foreach (var element in array)
+            {
+                index++;
+
                 try
                 {
+                    var dto = element.Deserialize<SerializableShape>(JsonSettings.Options);
+                    if (dto == null)
+                        throw new InvalidOperationException("Фигура не может быть null.");
+
                     var shape = ShapeConverter.ToRuntimeModel(dto);
                     validShapes.Add(shape);
                 }
-                catch (Exception shapeEx)
+                catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Пропущена некорректная фигура: {shapeEx.Message}");
+                    System.Diagnostics.Debug.WriteLine($"Ошибка при загрузке фигуры #{index}: {ex.Message}");
+
+                    if (!_skipAllErrors)
+                    {
+                        var dialogResult = await _dialogService.ShowSkipOptionsDialogAsync(
+                            "Ошибка загрузки фигуры",
+                            $"Фигура #{index} повреждена:\n{ex.Message}"
+                        );
+
+                        if (dialogResult == DialogResult.Cancel)
+                        {
+                            DrawnShapes.Clear();
+                            SelectedShape = null;
+                            return;
+                        }
+                        else if (dialogResult == DialogResult.No)
+                        {
+                            _skipAllErrors = true;
+                        }
+                    }
+                }
+                if (total > 0)
+                {
+                    LoadProgress = (double)index / total * 100;
                 }
             }
-
             DrawnShapes.Clear();
             foreach (var shape in validShapes)
             {
                 DrawnShapes.Add(shape);
             }
-
             SelectedShape = null;
             UpdateShapeIndices();
             SessionManager.SetLastFilePath(file.Path.LocalPath);
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Ошибка загрузки файла: {ex}");
+            System.Diagnostics.Debug.WriteLine($"Критическая ошибка при загрузке: {ex}");
+            await _dialogService.ShowConfirmationAsync(
+                "Ошибка",
+                $"Не удалось загрузить файл:\n{ex.Message}",
+                DialogButtons.OK);
+        }
+        finally
+        {
+            IsLoading = false;
+            LoadProgress = 0;
         }
     }
 

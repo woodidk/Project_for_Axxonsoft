@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using Avalonia.Media;
 using Avalonia.Controls.Shapes;
 using System;
 using System.Collections.Generic;
@@ -7,8 +8,10 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace forAxxon.Models;
+
 public interface IShape
 {
     string Type { get; }
@@ -17,13 +20,14 @@ public interface IShape
     int Index { get; set; }
     List<Point> Points { get; set; }
     bool IsSelected { get; set; }
+    Color? FillColor { get; set; }
 
     Point ComputeCentroid();
     void NotifyPointsChanged();
 }
+
 public class PointJsonConverter : JsonConverter<Point>
 {
-    
     public override Point Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         if (reader.TokenType != JsonTokenType.StartObject)
@@ -82,13 +86,14 @@ public static class JsonSettings
     };
 }
 
-public record SerializableShape(string Type, List<Point> Points);
+public record SerializableShape(string Type, List<Point> Points, string? FillColor = null);
 
-public abstract class ShapeBase : INotifyPropertyChanged, IShape
+public abstract class ShapeBase : ObservableObject, IShape
 {
     private bool _isSelected;
     private List<Point> _points = new();
     private int _index;
+    private Color? _fillColor; 
 
     public virtual string Type => GetType().Name;
     public string DisplayName => $"{Index}. {Name}";
@@ -96,11 +101,7 @@ public abstract class ShapeBase : INotifyPropertyChanged, IShape
     public List<Point> Points
     {
         get => _points;
-        set
-        {
-            _points = value ?? new List<Point>();
-            OnPropertyChanged();
-        }
+        set => SetProperty(ref _points, value);
     }
 
     public int Index
@@ -108,12 +109,8 @@ public abstract class ShapeBase : INotifyPropertyChanged, IShape
         get => _index;
         set
         {
-            if (_index != value)
-            {
-                _index = value;
-                OnPropertyChanged();
+            if (SetProperty(ref _index, value))
                 OnPropertyChanged(nameof(DisplayName));
-            }
         }
     }
 
@@ -122,15 +119,15 @@ public abstract class ShapeBase : INotifyPropertyChanged, IShape
     public bool IsSelected
     {
         get => _isSelected;
-        set
-        {
-            if (_isSelected != value)
-            {
-                _isSelected = value;
-                OnPropertyChanged();
-            }
-        }
+        set => SetProperty(ref _isSelected, value);
     }
+    public Color? FillColor
+    {
+        get => _fillColor;
+        set => SetProperty(ref _fillColor, value);
+    }
+
+    public bool HasFill => FillColor.HasValue;
 
     public Point ComputeCentroid()
     {
@@ -141,13 +138,6 @@ public abstract class ShapeBase : INotifyPropertyChanged, IShape
             Square s => GeometryHelper.ComputeCentroid(GeometryHelper.GetSquareFromDiagonal(s.Points[0], s.Points[1])),
             _ => new Point(0, 0)
         };
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
     public void NotifyPointsChanged() => OnPropertyChanged(nameof(Points));
@@ -218,6 +208,12 @@ public static class ShapeConverter
         }
 
         shape.Points = dto.Points;
+
+        if (!string.IsNullOrEmpty(dto.FillColor) && Color.TryParse(dto.FillColor, out var color))
+        {
+            shape.FillColor = color;
+        }
+
         return shape;
     }
 
@@ -228,7 +224,8 @@ public static class ShapeConverter
 
         return new SerializableShape(
             Type: shape.Type,
-            Points: shape.Points?.ToList() ?? new List<Point>()
+            Points: shape.Points?.ToList() ?? new List<Point>(),
+            FillColor: shape.FillColor?.ToString() 
         );
     }
 }

@@ -8,4 +8,7 @@ public enum DialogResult { None, OK, Yes, No, Cancel }
 public interface IDialogService
 {
     Task<DialogResult> ShowConfirmationAsync(string title, string message, DialogButtons buttons);
+
+
+    Task<DialogResult> ShowSkipOptionsDialogAsync(string title, string message);
 }

@@ -10,12 +10,12 @@ using forAxxon.Models;
 using forAxxon.services;
 using forAxxon.Services;
 using forAxxon.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace forAxxon.Views;
 
@@ -43,7 +43,6 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-
         var dialogService = services.GetRequiredService<IDialogService>();
         _vm = services.GetRequiredService<MainWindowViewModel>();
 
@@ -52,7 +51,6 @@ public partial class MainWindow : Window
 
         DataContext = _vm;
         _vm.StorageProvider = TopLevel.GetTopLevel(this)?.StorageProvider;
-
 
         _vm.DrawnShapes.CollectionChanged += OnDrawnShapesCollectionChanged;
         _vm.PropertyChanged += OnViewModelPropertyChanged;
@@ -92,6 +90,7 @@ public partial class MainWindow : Window
         if (e.Key == Key.LeftAlt || e.Key == Key.RightAlt)
             _isAltPressed = false;
     }
+
     private void OnDrawnShapesCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
         ScheduleRedraw();
@@ -165,17 +164,22 @@ public partial class MainWindow : Window
     {
         var (brush, thickness) = GetShapeAppearance(shape);
 
+        // Определяем заливку
+        var fillBrush = shape.FillColor.HasValue
+            ? new SolidColorBrush(shape.FillColor.Value)
+            : null;
+
         switch (shape)
         {
             case Circle c when c.Points.Count == 2:
-                DrawCircle(c, brush, thickness);
+                DrawCircle(c, brush, thickness, fillBrush);
                 break;
             case Triangle t when t.Points.Count == 3:
-                DrawPolygon(t.Points, brush, thickness);
+                DrawPolygon(t.Points, brush, thickness, fillBrush);
                 break;
             case Square s when s.Points.Count == 2:
                 var pts = GeometryHelper.GetSquareFromDiagonal(s.Points[0], s.Points[1]);
-                DrawPolygon(pts, brush, thickness);
+                DrawPolygon(pts, brush, thickness, fillBrush);
                 break;
         }
     }
@@ -297,22 +301,25 @@ public partial class MainWindow : Window
         [Canvas.TopProperty] = center.Y - radius
     });
 
-    private void DrawCircle(Circle c, IBrush stroke, double thickness) => DrawingCanvas.Children.Add(new Ellipse
+    // Обновлённый метод с поддержкой заливки
+    private void DrawCircle(Circle c, IBrush stroke, double thickness, IBrush? fill = null) => DrawingCanvas.Children.Add(new Ellipse
     {
         Width = c.Radius * 2,
         Height = c.Radius * 2,
         Stroke = stroke,
         StrokeThickness = thickness,
+        Fill = fill,
         [Canvas.LeftProperty] = c.Points[0].X - c.Radius,
         [Canvas.TopProperty] = c.Points[0].Y - c.Radius
     });
 
-    private void DrawPolygon(IList<Point> points, IBrush brush, double thickness) => DrawingCanvas.Children.Add(new Polygon
+    // Обновлённый метод с поддержкой заливки
+    private void DrawPolygon(IList<Point> points, IBrush brush, double thickness, IBrush? fill = null) => DrawingCanvas.Children.Add(new Polygon
     {
         Points = points,
         Stroke = brush,
         StrokeThickness = thickness,
-        Fill = null
+        Fill = fill
     });
 
     private void DrawPolygonPreview(IList<Point> points, IBrush brush) => DrawingCanvas.Children.Add(new Polygon
@@ -335,7 +342,6 @@ public partial class MainWindow : Window
         [Canvas.TopProperty] = center.Y - LABEL_OFFSET
     });
 
-
     private async void ClosingHandler(object? sender, WindowClosingEventArgs e)
     {
         if (_isClosingGracefully || _vm.DrawnShapes.Count == 0) return;
@@ -355,7 +361,6 @@ public partial class MainWindow : Window
         e.Cancel = false;
         Dispatcher.UIThread.Post(Close);
     }
-
 
     private void OnWindowClosed(object? sender, EventArgs e)
     {
